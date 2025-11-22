@@ -24,6 +24,9 @@ class PlannerTask extends HiveObject {
   @HiveField(6)
   DateTime createdAt;
 
+  @HiveField(7)
+  String frequency; // 'daily', 'weekly', 'monthly'
+
   PlannerTask({
     required this.id,
     required this.title,
@@ -31,6 +34,7 @@ class PlannerTask extends HiveObject {
     this.isCompleted = false,
     this.priority = 1,
     required this.date,
+    this.frequency = 'daily',
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
@@ -41,6 +45,7 @@ class PlannerTask extends HiveObject {
     bool? isCompleted,
     int? priority,
     DateTime? date,
+    String? frequency,
     DateTime? createdAt,
   }) {
     return PlannerTask(
@@ -50,7 +55,8 @@ class PlannerTask extends HiveObject {
       isCompleted: isCompleted ?? this.isCompleted,
       priority: priority ?? this.priority,
       date: date ?? this.date,
+      frequency: frequency ?? this.frequency,
       createdAt: createdAt ?? this.createdAt,
     );
   }
-} 
+}

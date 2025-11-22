@@ -23,6 +23,7 @@ class PlannerTaskAdapter extends TypeAdapter<PlannerTask> {
       isCompleted: fields[3] as bool,
       priority: fields[4] as int,
       date: fields[5] as DateTime,
+      frequency: fields[7] as String,
       createdAt: fields[6] as DateTime?,
     );
   }
@@ -30,7 +31,7 @@ class PlannerTaskAdapter extends TypeAdapter<PlannerTask> {
   @override
   void write(BinaryWriter writer, PlannerTask obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -44,7 +45,9 @@ class PlannerTaskAdapter extends TypeAdapter<PlannerTask> {
       ..writeByte(5)
       ..write(obj.date)
       ..writeByte(6)
-      ..write(obj.createdAt);
+      ..write(obj.createdAt)
+      ..writeByte(7)
+      ..write(obj.frequency);
   }
 
   @override

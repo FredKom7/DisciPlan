@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../providers/planner_provider.dart';
@@ -183,15 +184,16 @@ class _TaskStopwatchWidget extends StatefulWidget {
   State<_TaskStopwatchWidget> createState() => _TaskStopwatchWidgetState();
 }
 
-class _TaskStopwatchWidgetState extends State<_TaskStopwatchWidget> {
-  Stopwatch _stopwatch = Stopwatch();
+class _TaskStopwatchWidgetState extends State<_TaskStopwatchWidget> with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
+  final Stopwatch _stopwatch = Stopwatch();
   Duration _elapsed = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _ticker = Ticker(_onTick);
+    _ticker.start();
   }
 
   void _onTick(Duration duration) {
