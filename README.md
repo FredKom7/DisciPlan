@@ -1,4 +1,4 @@
-# Disciplan
+# DisciPlan
 
 A new Flutter project for self-productivity and discipline.
 
