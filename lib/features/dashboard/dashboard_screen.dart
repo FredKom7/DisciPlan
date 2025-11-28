@@ -17,11 +17,7 @@ class DashboardScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notifications coming soon!')),
-              );
-            },
+            onPressed: () => context.push('/notifications'),
           ),
         ],
       ),
@@ -80,7 +76,7 @@ class DashboardScreen extends StatelessWidget {
                   context,
                   icon: Icons.dashboard,
                   title: 'Dashboard',
-                  route: '/',
+                  route: '/dashboard',
                 ),
                 _buildDrawerItem(
                   context,
@@ -222,8 +218,12 @@ class DashboardScreen extends StatelessWidget {
 
                 final completedTodos = todos.where((todo) => todo.isCompleted).length;
                 final activeHabits = habits.where((habit) => habit.isActive).length;
-                final todayTasks = tasks.where((task) => 
-                  task.date.isAtSameMomentAs(DateTime.now().toUtc())).length;
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final todayTasks = tasks.where((task) {
+                  final taskDate = DateTime(task.date.year, task.date.month, task.date.day);
+                  return taskDate.isAtSameMomentAs(today);
+                }).length;
 
                 return Row(
                   children: [

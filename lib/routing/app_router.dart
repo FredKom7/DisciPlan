@@ -9,6 +9,7 @@ import '../features/habits/habits_screen.dart';
 import '../features/screen_time/screen_time_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import 'package:flutter/material.dart';
 
 class AppRouter {
@@ -132,6 +133,19 @@ class AppRouter {
               FadeTransition(opacity: animation, child: child),
         ),
       ),
+      GoRoute(
+        path: '/notifications',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const NotificationsScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              SlideTransition(
+                position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+                    .animate(animation),
+                child: child,
+              ),
+        ),
+      ),
     ],
   );
-} 
+}

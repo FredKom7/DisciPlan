@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../../providers/planner_provider.dart';
 import '../../../data/models/planner_task.dart';
 import 'package:uuid/uuid.dart';
-import 'package:lottie/lottie.dart';
 import '../../../core/themes/app_theme.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,40 +15,65 @@ class MonthlyPlannerScreen extends StatefulWidget {
 }
 
 class _MonthlyPlannerScreenState extends State<MonthlyPlannerScreen> {
-  late DateTime _monthStart;
-
-  @override
-  void initState() {
-    super.initState();
-    _monthStart = DateTime(DateTime.now().year, DateTime.now().month, 1);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<PlannerProvider>(context, listen: false).loadTasksForMonth(_monthStart);
-    });
-  }
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlannerProvider>(
-      builder: (context, provider, _) {
-        final tasks = provider.tasks.where((t) => t.date.month == _monthStart.month && t.date.year == _monthStart.year).toList();
-        if (tasks.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.event_busy, size: 64, color: Colors.grey.shade400),
-                const SizedBox(height: 16),
-                Text('No tasks for this month.', style: AppTheme.glassSubtitle),
-              ],
+    return Scaffold(
+      appBar: AppBar(
+        leading: BackButton(onPressed: () => context.pop()),
+        title: const Text('Monthly Planner'),
+      ),
+      body: Column(
+        children: [
+          TableCalendar(
+            firstDay: DateTime.utc(2020, 1, 1),
+            lastDay: DateTime.utc(2100, 12, 31),
+            focusedDay: _focusedDay,
+            calendarFormat: CalendarFormat.month,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+            },
+            onPageChanged: (focusedDay) {
+              setState(() {
+                _focusedDay = focusedDay;
+              });
+            },
+            calendarStyle: const CalendarStyle(
+              todayDecoration: BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+              selectedDecoration: BoxDecoration(
+                color: Colors.orange,
+                shape: BoxShape.circle,
+              ),
             ),
-          );
-        }
-        return Scaffold(
-          appBar: AppBar(
-            leading: BackButton(onPressed: () => context.pop()),
-            title: const Text('Monthly Planner'),
           ),
-          body: ListView.builder(
+          Expanded(
+            child: Consumer<PlannerProvider>(
+              builder: (context, provider, _) {
+                final tasks = provider.tasks
+                    .where((t) => t.frequency == 'monthly' && isSameDay(t.date, _selectedDay))
+                    .toList();
+                if (tasks.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.event_busy, size: 64, color: Colors.grey.shade400),
+                        const SizedBox(height: 16),
+                        Text('No tasks for this day.', style: AppTheme.glassSubtitle),
+                      ],
+                    ),
+                  );
+                }
+                return ListView.builder(
                   itemCount: tasks.length,
                   itemBuilder: (context, index) {
                     final task = tasks[index];
@@ -56,71 +81,125 @@ class _MonthlyPlannerScreenState extends State<MonthlyPlannerScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: AppTheme.glassBox(),
                       child: ListTile(
-                        title: Text(task.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                        subtitle: Text(task.date.toIso8601String()),
+                        leading: Checkbox(
+                          value: task.isCompleted,
+                          onChanged: (val) {
+                            provider.updateTask(
+                              task.copyWith(isCompleted: val ?? false),
+                            );
+                          },
+                        ),
+                        title: Text(
+                          task.title,
+                          style: TextStyle(
+                            decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            color: Colors.black,
+                          ),
+                        ),
+                        subtitle: Text('Priority: ${['Low', 'Medium', 'High'][task.priority]}', style: const TextStyle(color: Colors.black87)),
                         trailing: IconButton(
                           icon: const Icon(Icons.delete, color: Colors.redAccent),
-                          onPressed: () => provider.deleteTask(task.id, _monthStart),
+                          onPressed: () => provider.deleteTask(task.id, _focusedDay),
                         ),
-                        onTap: () async {
-                          final newTitle = await showDialog<String>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Edit Task'),
-                              content: TextField(
-                                controller: TextEditingController(text: task.title),
-                                onSubmitted: (value) => Navigator.pop(context, value),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, null),
-                                  child: const Text('Cancel'),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, task.title),
-                                  child: const Text('Save'),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (newTitle != null && newTitle.isNotEmpty) {
-                            provider.updateTask(task.copyWith(title: newTitle));
-                          }
-                        },
                       ),
                     );
                   },
-                ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () async {
-              final title = await showDialog<String>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('New Task'),
-                  content: const TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(hintText: 'Task title'),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, null),
-                      child: const Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, ''),
-                      child: const Text('Add'),
-                    ),
-                  ],
-                ),
-              );
-              if (title != null && title.isNotEmpty) {
-                provider.addTask(PlannerTask(id: const Uuid().v4(), title: title, date: _monthStart));
-              }
-            },
-            child: const Icon(Icons.add),
+                );
+              },
+            ),
           ),
-        );
-      },
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final provider = Provider.of<PlannerProvider>(context, listen: false);
+          final result = await showDialog<PlannerTask>(
+            context: context,
+            builder: (context) => _AddMonthlyTaskDialog(date: _selectedDay),
+          );
+          if (result != null) {
+            provider.addTask(result);
+          }
+        },
+        child: const Icon(Icons.add),
+      ),
     );
   }
-} 
+}
+
+class _AddMonthlyTaskDialog extends StatefulWidget {
+  final DateTime date;
+  const _AddMonthlyTaskDialog({required this.date});
+
+  @override
+  State<_AddMonthlyTaskDialog> createState() => _AddMonthlyTaskDialogState();
+}
+
+class _AddMonthlyTaskDialogState extends State<_AddMonthlyTaskDialog> {
+  final _formKey = GlobalKey<FormState>();
+  String _title = '';
+  String _description = '';
+  int _priority = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Monthly Task'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              decoration: const InputDecoration(labelText: 'Title'),
+              validator: (val) => val == null || val.isEmpty ? 'Enter a title' : null,
+              onSaved: (val) => _title = val ?? '',
+            ),
+            TextFormField(
+              decoration: const InputDecoration(labelText: 'Description'),
+              onSaved: (val) => _description = val ?? '',
+            ),
+            DropdownButtonFormField<int>(
+              value: _priority,
+              decoration: const InputDecoration(labelText: 'Priority'),
+              items: const [
+                DropdownMenuItem(value: 0, child: Text('Low')),
+                DropdownMenuItem(value: 1, child: Text('Medium')),
+                DropdownMenuItem(value: 2, child: Text('High')),
+              ],
+              onChanged: (val) => setState(() => _priority = val ?? 1),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_formKey.currentState?.validate() ?? false) {
+              _formKey.currentState?.save();
+              Navigator.of(context).pop(
+                PlannerTask(
+                  id: const Uuid().v4(),
+                  title: _title,
+                  description: _description,
+                  priority: _priority,
+                  isCompleted: false,
+                  date: widget.date,
+                  createdAt: DateTime.now(),
+                  frequency: 'monthly',
+                ),
+              );
+            }
+          },
+          child: const Text('Add'),
+        ),
+      ],
+    );
+  }
+}

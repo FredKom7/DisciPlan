@@ -4,7 +4,6 @@ import '../../providers/screen_time_provider.dart';
 import '../../data/models/screen_time_entry.dart';
 import 'package:uuid/uuid.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:lottie/lottie.dart';
 import '../../core/themes/app_theme.dart';
 import 'package:go_router/go_router.dart';
 
@@ -21,55 +20,117 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
   DateTime _selectedDate = DateTime.now();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<ScreenTimeProvider>(context, listen: false).loadEntriesForDate(_selectedDate);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ScreenTimeProvider()..loadEntriesForDate(_selectedDate),
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
-            onPressed: () => context.pop(),
-          ),
-          backgroundColor: Colors.white.withOpacity(0.85),
-          elevation: 0,
-          title: const Text('Screen Time', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
-          centerTitle: true,
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
+          onPressed: () => context.pop(),
         ),
-        backgroundColor: Colors.grey[100],
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text('Date: ${_selectedDate.toLocal().toString().split(' ')[0]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.calendar_today, color: Colors.black87),
-                    onPressed: () async {
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked != null) {
-                        setState(() => _selectedDate = picked);
-                        Provider.of<ScreenTimeProvider>(context, listen: false)
-                            .loadEntriesForDate(picked);
-                      }
-                    },
-                  ),
-                ],
-              ),
+        backgroundColor: Colors.white.withOpacity(0.85),
+        elevation: 0,
+        title: const Text('Screen Time', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
+        centerTitle: true,
+      ),
+      backgroundColor: Colors.grey[100],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Date: ${_selectedDate.toLocal().toString().split(' ')[0]}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.calendar_today, color: Colors.black87),
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                    );
+                    if (picked != null) {
+                      setState(() => _selectedDate = picked);
+                      Provider.of<ScreenTimeProvider>(context, listen: false)
+                          .loadEntriesForDate(picked);
+                    }
+                  },
+                ),
+              ],
             ),
-            Consumer<ScreenTimeProvider>(
+          ),
+          Consumer<ScreenTimeProvider>(
+            builder: (context, provider, _) {
+              final summary = provider.getCategorySummary();
+              if (summary.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.only(top: 48.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.15),
+                              blurRadius: 16,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Icon(Icons.timelapse, size: 72, color: Colors.grey.shade400),
+                      ),
+                      const SizedBox(height: 24),
+                      Text('No screen time data for this day!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      const SizedBox(height: 8),
+                      Text('Tap + to add your first entry.', style: TextStyle(fontSize: 16, color: Colors.black54)),
+                    ],
+                  ),
+                );
+              }
+              return SizedBox(
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: summary.entries.map((e) {
+                      final color = e.key == 'Productive'
+                          ? Colors.green
+                          : e.key == 'Neutral'
+                              ? Colors.blue
+                              : Colors.red;
+                      return PieChartSectionData(
+                        color: color,
+                        value: e.value.toDouble(),
+                        title: '${e.key}\n${e.value} min',
+                        radius: 60,
+                        titleStyle: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          Expanded(
+            child: Consumer<ScreenTimeProvider>(
               builder: (context, provider, _) {
-                final summary = provider.getCategorySummary();
-                if (summary.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 48.0),
+                final entries = provider.entries;
+                if (entries.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -89,121 +150,64 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
                           child: Icon(Icons.timelapse, size: 72, color: Colors.grey.shade400),
                         ),
                         const SizedBox(height: 24),
-                        Text('No screen time data for this day!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+                        Text('No entries!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
                         const SizedBox(height: 8),
                         Text('Tap + to add your first entry.', style: TextStyle(fontSize: 16, color: Colors.black54)),
                       ],
                     ),
                   );
                 }
-                return SizedBox(
-                  height: 200,
-                  child: PieChart(
-                    PieChartData(
-                      sections: summary.entries.map((e) {
-                        final color = e.key == 'Productive'
-                            ? Colors.green
-                            : e.key == 'Neutral'
-                                ? Colors.blue
-                                : Colors.red;
-                        return PieChartSectionData(
-                          color: color,
-                          value: e.value.toDouble(),
-                          title: '${e.key}\n${e.value} min',
-                          radius: 60,
-                          titleStyle: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.bold),
-                        );
-                      }).toList(),
-                    ),
-                  ),
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  itemCount: entries.length,
+                  itemBuilder: (context, index) {
+                    final entry = entries[index];
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.12),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        title: Text(entry.appName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)),
+                        subtitle: Text('${entry.duration} min | ${entry.category}', style: const TextStyle(fontSize: 16, color: Colors.black54)),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.redAccent),
+                          tooltip: 'Delete',
+                          onPressed: () => provider.deleteEntry(entry.id, _selectedDate),
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
-            const Divider(),
-            Expanded(
-              child: Consumer<ScreenTimeProvider>(
-                builder: (context, provider, _) {
-                  final entries = provider.entries;
-                  if (entries.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(24),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.15),
-                                  blurRadius: 16,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Icon(Icons.timelapse, size: 72, color: Colors.grey.shade400),
-                          ),
-                          const SizedBox(height: 24),
-                          Text('No entries!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-                          const SizedBox(height: 8),
-                          Text('Tap + to add your first entry.', style: TextStyle(fontSize: 16, color: Colors.black54)),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    itemCount: entries.length,
-                    itemBuilder: (context, index) {
-                      final entry = entries[index];
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.12),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          title: Text(entry.appName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)),
-                          subtitle: Text('${entry.duration} min | ${entry.category}', style: const TextStyle(fontSize: 16, color: Colors.black54)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.redAccent),
-                            tooltip: 'Delete',
-                            onPressed: () => provider.deleteEntry(entry.id, _selectedDate),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        floatingActionButton: Builder(
-          builder: (context) => FloatingActionButton(
-            backgroundColor: Colors.black,
-            onPressed: () async {
-              final provider = Provider.of<ScreenTimeProvider>(context, listen: false);
-              final result = await showDialog<ScreenTimeEntry>(
-                context: context,
-                builder: (context) => _AddScreenTimeEntryDialog(date: _selectedDate),
-              );
-              if (result != null) {
-                provider.addEntry(result);
-              }
-            },
-            child: const Icon(Icons.add, color: Colors.white),
-            tooltip: 'Add Entry',
           ),
+        ],
+      ),
+      floatingActionButton: Builder(
+        builder: (context) => FloatingActionButton(
+          backgroundColor: Colors.black,
+          onPressed: () async {
+            final provider = Provider.of<ScreenTimeProvider>(context, listen: false);
+            final result = await showDialog<ScreenTimeEntry>(
+              context: context,
+              builder: (context) => _AddScreenTimeEntryDialog(date: _selectedDate),
+            );
+            if (result != null) {
+              provider.addEntry(result);
+            }
+          },
+          child: const Icon(Icons.add, color: Colors.white),
+          tooltip: 'Add Entry',
         ),
       ),
     );
@@ -290,4 +294,4 @@ class _AddScreenTimeEntryDialogState extends State<_AddScreenTimeEntryDialog> {
       ],
     );
   }
-} 
+}

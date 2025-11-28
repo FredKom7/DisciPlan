@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/models/habit.dart';
 import '../data/repositories/habit_repository.dart';
+import '../core/services/notification_service.dart';
 
 class HabitProvider extends ChangeNotifier {
   final HabitRepository _repository = HabitRepository();
@@ -53,5 +54,9 @@ class HabitProvider extends ChangeNotifier {
     );
     await _repository.updateHabit(updated);
     await loadHabits();
+    
+    // Send notifications
+    await NotificationService.notifyHabitCompleted(habit.name, newStreak);
+    await NotificationService.notifyHabitStreak(habit.name, newStreak);
   }
-} 
+}

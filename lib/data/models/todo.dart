@@ -42,17 +42,26 @@ class Todo extends HiveObject {
     this.frequency = 'daily',
   }) : createdAt = createdAt ?? DateTime.now();
 
-  Todo copyWith({String? id, String? title, bool? isCompleted, String? frequency}) {
+  Todo copyWith({
+    String? id,
+    String? title,
+    String? description,
+    bool? isCompleted,
+    int? priority,
+    String? category,
+    DateTime? deadline,
+    String? frequency,
+  }) {
     return Todo(
       id: id ?? this.id,
       title: title ?? this.title,
+      description: description ?? this.description,
       isCompleted: isCompleted ?? this.isCompleted,
+      priority: priority ?? this.priority,
+      category: category ?? this.category,
+      deadline: deadline ?? this.deadline,
       frequency: frequency ?? this.frequency,
-      description: description,
-      priority: priority,
-      category: category,
-      deadline: deadline,
       createdAt: createdAt,
     );
   }
-} 
+}
