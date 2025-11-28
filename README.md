@@ -1,6 +1,6 @@
 <p align="center">
   <!-- Replace the banner link below after uploading your banner into /assets -->
-  <img src="https://raw.githubusercontent.com/FredKom7/DisciPlan/main/assets/banner.png" alt="DisciPlan Banner" width="100%" />
+  <img src="https://raw.githubusercontent.com/FredKom7/DisciPlan/master/assets/banner.png" width="100%" />
 </p>
 
 <h1 align="center">🌿 DisciPlan</h1>
