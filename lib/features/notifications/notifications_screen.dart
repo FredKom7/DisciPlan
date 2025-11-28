@@ -16,7 +16,7 @@ class NotificationsScreen extends StatelessWidget {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(),
+          onPressed: () => context.go('/dashboard'),
         ),
         title: const Text('Notifications'),
         backgroundColor: isDark ? Colors.grey[900] : Colors.white,

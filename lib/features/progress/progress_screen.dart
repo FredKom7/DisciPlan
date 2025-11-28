@@ -17,7 +17,7 @@ class ProgressScreen extends StatelessWidget {
           appBar: AppBar(
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
-              onPressed: () => context.pop(),
+              onPressed: () => context.go('/dashboard'),
             ),
             backgroundColor: Colors.white.withOpacity(0.85),
             elevation: 0,

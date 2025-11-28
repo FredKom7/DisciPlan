@@ -38,7 +38,10 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> with SingleTi
     
     return Scaffold(
       appBar: AppBar(
-        leading: BackButton(onPressed: () => context.pop()),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/dashboard'),
+        ),
         title: Text('Planner', style: TextStyle(color: isDark ? Colors.white : Colors.black87)),
         backgroundColor: isDark ? Colors.grey[900] : Colors.white,
         elevation: 0,
