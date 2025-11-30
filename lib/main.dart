@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
+import 'providers/auth_provider.dart';
 import 'providers/habit_provider.dart';
 import 'providers/planner_provider.dart';
 import 'providers/todo_provider.dart';
@@ -8,6 +9,7 @@ import 'providers/restriction_provider.dart';
 import 'providers/progress_provider.dart';
 import 'providers/screen_time_provider.dart';
 import 'providers/theme_provider.dart';
+import 'data/models/user_model.dart';
 import 'data/models/todo.dart';
 import 'data/models/planner_task.dart';
 import 'data/models/habit.dart';
@@ -27,6 +29,7 @@ void main() async {
   );
   await NotificationService.initialize();
   await Hive.initFlutter();
+  Hive.registerAdapter(UserModelAdapter());
   Hive.registerAdapter(TodoAdapter());
   Hive.registerAdapter(PlannerTaskAdapter());
   Hive.registerAdapter(HabitAdapter());
@@ -37,6 +40,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => HabitProvider()),
         ChangeNotifierProvider(create: (_) => PlannerProvider()),
         ChangeNotifierProvider(create: (_) => TodoProvider()),

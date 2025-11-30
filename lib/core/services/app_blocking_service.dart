@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../data/models/restriction.dart';
+import '../utils/platform_utils.dart';
 
 /// Service for managing app restrictions and blocking
 /// 

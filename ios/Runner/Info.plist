@@ -45,5 +45,18 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<!-- Permission descriptions for iOS -->
+	<key>NSCameraUsageDescription</key>
+	<string>DisciPlan needs access to your camera to take profile photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DisciPlan needs access to your photo library to select profile photos.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>DisciPlan needs permission to save photos to your library.</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>DisciPlan sends notifications to remind you about tasks, habits, and goals.</string>
+	<!-- Firebase App Check -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
+
 </dict>
 </plist>
