@@ -9,6 +9,27 @@ class PlannerProvider extends ChangeNotifier {
 
   List<PlannerTask> get tasks => _tasks;
 
+  List<PlannerTask> getTasksForDate(DateTime date) {
+    return _tasks.where((task) {
+      return task.date.year == date.year &&
+             task.date.month == date.month &&
+             task.date.day == date.day;
+    }).toList();
+  }
+
+  Future<void> toggleTask(String id) async {
+    final task = _tasks.firstWhere((t) => t.id == id);
+    final updatedTask = PlannerTask(
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      date: task.date,
+      isCompleted: !task.isCompleted,
+      category: task.category,
+    );
+    await updateTask(updatedTask);
+  }
+
   Future<void> loadTasksForWeek(DateTime weekStart) async {
     _tasks = await _repository.getTasksForWeek(weekStart);
     notifyListeners();

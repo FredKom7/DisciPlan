@@ -10,11 +10,65 @@ import '../features/screen_time/screen_time_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/notifications/notifications_screen.dart';
+import '../features/auth/welcome_screen.dart';
+import '../features/auth/login_screen.dart';
+import '../features/auth/signup_screen.dart';
+import '../features/auth/phone_verification_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 import 'package:flutter/material.dart';
 
 class AppRouter {
   static final router = GoRouter(
+    initialLocation: '/welcome',
     routes: [
+      // Authentication routes
+      GoRoute(
+        path: '/welcome',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const WelcomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
+      GoRoute(
+        path: '/signup',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SignupScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
+      GoRoute(
+        path: '/phone-verification',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const PhoneVerificationScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const ForgotPasswordScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      ),
+      
+      // Main app routes
       GoRoute(
         path: '/',
         pageBuilder: (context, state) => CustomTransitionPage(

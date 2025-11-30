@@ -40,6 +40,11 @@ class TodoProvider extends ChangeNotifier {
     }
   }
 
+  // Alias for toggleCompleted
+  Future<void> toggleTodo(String id) async {
+    await toggleCompleted(id);
+  }
+
   List<Todo> getTodosByFrequency(String frequency) {
     return _todos.where((t) => t.frequency == frequency).toList();
   }

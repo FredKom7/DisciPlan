@@ -1,149 +1,464 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/progress_provider.dart';
-import '../../data/models/progress_entry.dart';
-import 'package:fl_chart/fl_chart.dart';
-import '../../core/themes/app_theme.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import '../../providers/todo_provider.dart';
+import '../../providers/habit_provider.dart';
+import '../../providers/screen_time_provider.dart';
+import '../../core/themes/app_colors.dart';
+import '../../core/widgets/stat_card.dart';
+import '../../core/widgets/custom_bottom_nav.dart';
 
-class ProgressScreen extends StatelessWidget {
+class ProgressScreen extends StatefulWidget {
   const ProgressScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<ProgressProvider>(
-      builder: (context, provider, _) {
-        return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black87),
-              onPressed: () => context.go('/dashboard'),
-            ),
-            backgroundColor: Colors.white.withOpacity(0.85),
-            elevation: 0,
-            title: const Text('Progress', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 24)),
-            centerTitle: true,
-          ),
-          backgroundColor: Colors.grey[100],
-          body: provider.totalCompletedTasks == 0 && provider.totalCompletedHabits == 0 && provider.totalScreenTime == 0
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.15),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Icon(Icons.insights, size: 72, color: Colors.grey.shade400),
-                      ),
-                      const SizedBox(height: 24),
-                      Text('No progress data yet!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      const SizedBox(height: 8),
-                      Text('Complete tasks, habits, or track screen time to see your progress.', style: TextStyle(fontSize: 16, color: Colors.black54)),
-                    ],
-                  ),
-                )
-              : Column(
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.12),
-                            blurRadius: 12,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          children: [
-                            Text('Tasks Completed: ${provider.totalCompletedTasks}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)),
-                            const SizedBox(height: 8),
-                            Text('Habits Completed: ${provider.totalCompletedHabits}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)),
-                            const SizedBox(height: 8),
-                            Text('Screen Time (min): ${provider.totalScreenTime}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    _GrowthVisual(total: provider.totalCompletedTasks + provider.totalCompletedHabits),
-                  ],
-                ),
-        );
-      },
-    );
-  }
+  State<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final int value;
-  const _StatCard({required this.label, required this.value});
+class _ProgressScreenState extends State<ProgressScreen> {
+  int _currentNavIndex = 3;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text('$value', style: const TextStyle(fontSize: 18)),
+    if (_currentNavIndex == 0) {
+      context.go('/dashboard');
+      return const SizedBox.shrink();
+    } else if (_currentNavIndex == 1) {
+      context.go('/planner');
+      return const SizedBox.shrink();
+    } else if (_currentNavIndex == 2) {
+      context.go('/habits');
+      return const SizedBox.shrink();
+    }
+
+    return Scaffold(
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            // Header
+            SliverToBoxAdapter(
+              child: _buildHeader(context),
+            ),
+            
+            // Monthly Stats
+            SliverToBoxAdapter(
+              child: _buildMonthlyStats(context),
+            ),
+            
+            // Growth Journey
+            SliverToBoxAdapter(
+              child: _buildGrowthJourney(context),
+            ),
+            
+            // Achievements
+            SliverToBoxAdapter(
+              child: _buildAchievements(context),
+            ),
+            
+            // Weekly Trend
+            SliverToBoxAdapter(
+              child: _buildWeeklyTrend(context),
+            ),
+            
+            // Bottom padding
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 100),
+            ),
           ],
         ),
       ),
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _currentNavIndex,
+        onTap: (index) {
+          setState(() {
+            _currentNavIndex = index;
+          });
+        },
+      ),
     );
   }
-}
 
-class _GrowthVisual extends StatelessWidget {
-  final int total;
-  const _GrowthVisual({required this.total});
-
-  @override
-  Widget build(BuildContext context) {
-    // Use a static icon as a placeholder for growth visual
-    final stage = total < 5
-        ? 'Seed'
-        : total < 10
-            ? 'Sprout'
-            : total < 20
-                ? 'Bud'
-                : 'Flower';
+  Widget _buildHeader(BuildContext context) {
+    final now = DateTime.now();
+    final month = ['January', 'February', 'March', 'April', 'May', 'June', 
+                   'July', 'August', 'September', 'October', 'November', 'December'][now.month - 1];
+    
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            stage == 'Seed'
-                ? Icons.grass
-                : stage == 'Sprout'
-                    ? Icons.eco
-                    : stage == 'Bud'
-                        ? Icons.local_florist
-                        : Icons.filter_vintage,
-            size: 64,
-            color: Colors.green,
+          Text(
+            'Progress',
+            style: Theme.of(context).textTheme.displayMedium,
           ),
-          Text('Growth Stage: $stage'),
+          const SizedBox(height: 4),
+          Text(
+            '$month ${now.year}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _buildMonthlyStats(BuildContext context) {
+    final todoProvider = context.watch<TodoProvider>();
+    final habitProvider = context.watch<HabitProvider>();
+    final screenTimeProvider = context.watch<ScreenTimeProvider>();
+    
+    final tasksCompleted = todoProvider.todos.where((t) => t.isCompleted).length;
+    final activeHabits = habitProvider.habits.length;
+    final screenTimeSaved = (screenTimeProvider.getTodayTotal() / 60).toStringAsFixed(0);
+    final longestStreak = habitProvider.habits.isNotEmpty
+        ? habitProvider.habits.map((h) => h.currentStreak).reduce((a, b) => a > b ? a : b)
+        : 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: AppSpacing.md,
+        crossAxisSpacing: AppSpacing.md,
+        childAspectRatio: 1.3,
+        children: [
+          _buildStatCard(
+            icon: Icons.check_circle,
+            value: '$tasksCompleted',
+            label: 'Tasks\ncompleted',
+            color: AppColors.primary,
+          ),
+          _buildStatCard(
+            icon: Icons.track_changes,
+            value: '$activeHabits',
+            label: 'Habits\nactive',
+            color: AppColors.warning,
+          ),
+          _buildStatCard(
+            icon: Icons.access_time,
+            value: '${screenTimeSaved}h',
+            label: 'Saved\nscreen time',
+            color: AppColors.success,
+          ),
+          _buildStatCard(
+            icon: Icons.local_fire_department,
+            value: '$longestStreak',
+            label: 'Streak\ndays',
+            color: AppColors.error,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrowthJourney(BuildContext context) {
+    final todoProvider = context.watch<TodoProvider>();
+    final totalTasks = todoProvider.todos.length;
+    final completedTasks = todoProvider.todos.where((t) => t.isCompleted).length;
+    final progress = totalTasks > 0 ? (completedTasks / totalTasks * 100).toInt() : 0;
+
+    return Container(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Growth Journey',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          
+          // Plant visualization
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  _getPlantEmoji(progress),
+                  style: const TextStyle(fontSize: 80),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  _getGrowthStage(progress),
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '$progress%',
+                  style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: AppSpacing.xl),
+          
+          // Progress bar with milestones
+          Stack(
+            children: [
+              Container(
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+              ),
+              FractionallySizedBox(
+                widthFactor: progress / 100,
+                child: Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.gradientProgress,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: AppSpacing.sm),
+          
+          // Milestone markers
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildMilestone('0%', '🌱'),
+              _buildMilestone('33%', '🌿'),
+              _buildMilestone('66%', '🌳'),
+              _buildMilestone('100%', '🌲'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMilestone(String label, String emoji) {
+    return Column(
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 20)),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: AppColors.textTertiary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getPlantEmoji(int progress) {
+    if (progress >= 100) return '🌲';
+    if (progress >= 66) return '🌳';
+    if (progress >= 33) return '🌿';
+    return '🌱';
+  }
+
+  String _getGrowthStage(int progress) {
+    if (progress >= 100) return 'Mighty Tree';
+    if (progress >= 66) return 'Growing Tree';
+    if (progress >= 33) return 'Young Plant';
+    return 'Sprout';
+  }
+
+  Widget _buildAchievements(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '🏆 Achievements',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              Text(
+                '3/6',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              _buildAchievementBadge('🎯', 'First Task', true),
+              _buildAchievementBadge('🔥', '7 Day Streak', true),
+              _buildAchievementBadge('💪', '30 Days', true),
+              _buildAchievementBadge('⭐', '100 Tasks', false),
+              _buildAchievementBadge('🏅', 'Habit Master', false),
+              _buildAchievementBadge('👑', 'Discipline King', false),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAchievementBadge(String emoji, String label, bool unlocked) {
+    return Container(
+      width: 100,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: unlocked 
+            ? AppColors.primary.withOpacity(0.2)
+            : AppColors.surfaceLight,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: unlocked ? AppColors.primary : AppColors.divider,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            emoji,
+            style: TextStyle(
+              fontSize: 32,
+              color: unlocked ? null : Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: unlocked ? AppColors.textPrimary : AppColors.textTertiary,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyTrend(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Weekly Trend',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          
+          // Simple bar chart
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildDayBar('M', 60),
+              _buildDayBar('T', 75),
+              _buildDayBar('W', 50),
+              _buildDayBar('T', 80),
+              _buildDayBar('F', 90),
+              _buildDayBar('S', 85),
+              _buildDayBar('S', 70),
+            ],
+          ),
+          
+          const SizedBox(height: AppSpacing.lg),
+          
+          Center(
+            child: Text(
+              '+15% improvement this month 🎉',
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.success,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayBar(String day, double percentage) {
+    return Column(
+      children: [
+        Container(
+          width: 32,
+          height: percentage * 1.5,
+          decoration: BoxDecoration(
+            gradient: AppColors.gradientBlue,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          day,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

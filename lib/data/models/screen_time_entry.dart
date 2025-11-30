@@ -25,10 +25,11 @@ class ScreenTimeEntry extends HiveObject {
     required this.id,
     required this.appName,
     required this.category,
-    required this.duration,
+    required int durationMinutes,
     required this.date,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  }) : duration = durationMinutes,
+       createdAt = createdAt ?? DateTime.now();
 
   int get durationMinutes => duration;
-} 
+}

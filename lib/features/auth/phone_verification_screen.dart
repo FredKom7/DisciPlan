@@ -10,7 +10,7 @@ class PhoneVerificationScreen extends StatefulWidget {
   
   const PhoneVerificationScreen({
     Key? key,
-    required this.phoneNumber,
+    this.phoneNumber = '',
   }) : super(key: key);
 
   @override
@@ -34,7 +34,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   @override
   void initState() {
     super.initState();
-    _startVerification();
+    if (widget.phoneNumber.isNotEmpty) {
+      _startVerification();
+    }
     _startCountdown();
   }
 

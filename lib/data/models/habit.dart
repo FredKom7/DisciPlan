@@ -45,4 +45,20 @@ class Habit extends HiveObject {
       isActive: isActive ?? this.isActive,
     );
   }
-} 
+
+  // Getter for current streak (alias for streak field)
+  int get currentStreak => streak;
+
+  // Check if habit was completed today
+  bool isCompletedToday() {
+    if (lastCompleted == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final completedDate = DateTime(
+      lastCompleted!.year,
+      lastCompleted!.month,
+      lastCompleted!.day,
+    );
+    return completedDate.isAtSameMomentAs(today);
+  }
+}

@@ -18,54 +18,33 @@ class RestrictionAdapter extends TypeAdapter<Restriction> {
     };
     return Restriction(
       id: fields[0] as String,
-      type: fields[1] as String,
-      target: fields[2] as String,
-      limitMinutes: fields[3] as int?,
-      isActive: fields[4] as bool,
-      createdAt: fields[5] as DateTime?,
-      startTime: fields[6] as DateTime?,
-      endTime: fields[7] as DateTime?,
-      scheduleType: fields[8] as String,
-      activeDays: (fields[9] as List?)?.cast<int>(),
-      dailyStartTime: fields[10] as String?,
-      dailyEndTime: fields[11] as String?,
-      durationMinutes: fields[12] as int?,
-      packageName: fields[13] as String?,
+      appName: fields[1] as String,
+      startTime: fields[2] as String,
+      endTime: fields[3] as String,
+      days: (fields[4] as List).cast<String>(),
+      isActive: fields[5] as bool,
+      createdAt: fields[6] as DateTime?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Restriction obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.type)
+      ..write(obj.appName)
       ..writeByte(2)
-      ..write(obj.target)
-      ..writeByte(3)
-      ..write(obj.limitMinutes)
-      ..writeByte(4)
-      ..write(obj.isActive)
-      ..writeByte(5)
-      ..write(obj.createdAt)
-      ..writeByte(6)
       ..write(obj.startTime)
-      ..writeByte(7)
+      ..writeByte(3)
       ..write(obj.endTime)
-      ..writeByte(8)
-      ..write(obj.scheduleType)
-      ..writeByte(9)
-      ..write(obj.activeDays)
-      ..writeByte(10)
-      ..write(obj.dailyStartTime)
-      ..writeByte(11)
-      ..write(obj.dailyEndTime)
-      ..writeByte(12)
-      ..write(obj.durationMinutes)
-      ..writeByte(13)
-      ..write(obj.packageName);
+      ..writeByte(4)
+      ..write(obj.days)
+      ..writeByte(5)
+      ..write(obj.isActive)
+      ..writeByte(6)
+      ..write(obj.createdAt);
   }
 
   @override

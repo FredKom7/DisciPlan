@@ -10,13 +10,13 @@ class Todo extends HiveObject {
   String title;
 
   @HiveField(2)
-  String description;
+  String? description;
 
   @HiveField(3)
   bool isCompleted;
 
   @HiveField(4)
-  int priority; // 0: low, 1: medium, 2: high
+  String priority; // 'Low', 'Medium', 'High'
 
   @HiveField(5)
   String category;
@@ -33,9 +33,9 @@ class Todo extends HiveObject {
   Todo({
     required this.id,
     required this.title,
-    this.description = '',
+    this.description,
     this.isCompleted = false,
-    this.priority = 1,
+    this.priority = 'Medium',
     this.category = '',
     this.deadline,
     DateTime? createdAt,
@@ -47,7 +47,7 @@ class Todo extends HiveObject {
     String? title,
     String? description,
     bool? isCompleted,
-    int? priority,
+    String? priority,
     String? category,
     DateTime? deadline,
     String? frequency,

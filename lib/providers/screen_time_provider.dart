@@ -30,4 +30,16 @@ class ScreenTimeProvider extends ChangeNotifier {
     }
     return summary;
   }
-} 
+
+  // Get total screen time for today in minutes
+  int getTodayTotal() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return _entries
+        .where((entry) {
+          final entryDate = DateTime(entry.date.year, entry.date.month, entry.date.day);
+          return entryDate.isAtSameMomentAs(today);
+        })
+        .fold(0, (sum, entry) => sum + entry.durationMinutes);
+  }
+}

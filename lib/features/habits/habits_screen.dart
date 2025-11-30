@@ -1,571 +1,408 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/habit_provider.dart';
 import '../../data/models/habit.dart';
+import '../../core/themes/app_colors.dart';
+import '../../core/widgets/streak_indicator.dart';
+import '../../core/widgets/gradient_button.dart';
+import '../../core/widgets/custom_bottom_nav.dart';
 import 'package:uuid/uuid.dart';
-import '../../core/themes/app_theme.dart';
-import 'package:go_router/go_router.dart';
 
-class HabitsScreen extends StatelessWidget {
+class HabitsScreen extends StatefulWidget {
   const HabitsScreen({Key? key}) : super(key: key);
 
   @override
+  State<HabitsScreen> createState() => _HabitsScreenState();
+}
+
+class _HabitsScreenState extends State<HabitsScreen> {
+  int _currentNavIndex = 2;
+
+  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    // Handle navigation changes after build completes
+    if (_currentNavIndex != 2) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_currentNavIndex == 0) {
+          context.go('/dashboard');
+        } else if (_currentNavIndex == 1) {
+          context.go('/planner');
+        } else if (_currentNavIndex == 3) {
+          context.go('/progress');
+        }
+        // Reset to habits index
+        setState(() {
+          _currentNavIndex = 2;
+        });
+      });
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/dashboard'),
-        ),
-        title: const Text('Habits'),
-        backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-        elevation: 0,
-      ),
-      backgroundColor: isDark ? Colors.grey[850] : Colors.grey[50],
-      body: Consumer<HabitProvider>(
-        builder: (context, provider, _) {
-          final habits = provider.habits;
-          
-          if (habits.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.self_improvement,
-                    size: 80,
-                    color: isDark ? Colors.white24 : Colors.grey.shade300,
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'No habits yet',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white70 : Colors.black54,
+      body: SafeArea(
+        child: Consumer<HabitProvider>(
+          builder: (context, provider, _) {
+            final habits = provider.habits;
+            final completedToday = habits.where((h) => h.isCompletedToday()).length;
+            final totalHabits = habits.length;
+            final todayProgress = totalHabits > 0 
+                ? ((completedToday / totalHabits) * 100).toInt()
+                : 0;
+
+            return CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _buildHeader(context, provider),
+                ),
+                
+                SliverToBoxAdapter(
+                  child: _buildTodayProgress(context, todayProgress, habits),
+                ),
+                
+                if (habits.isNotEmpty) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.xl,
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                      ),
+                      child: Text(
+                        'Daily Habits',
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Start building good habits today!',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: isDark ? Colors.white38 : Colors.black38,
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final habit = habits[index];
+                        return _buildHabitItem(context, habit, provider);
+                      },
+                      childCount: habits.length,
                     ),
                   ),
                 ],
-              ),
+                
+                SliverToBoxAdapter(
+                  child: _buildWeeklyStats(context, habits),
+                ),
+                
+                if (habits.isEmpty)
+                  SliverFillRemaining(
+                    child: _buildEmptyState(context),
+                  ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
             );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: habits.length,
-            itemBuilder: (context, index) {
-              final habit = habits[index];
-              final now = DateTime.now();
-              final today = DateTime(now.year, now.month, now.day);
-              final lastCompleted = habit.lastCompleted;
-              final isCompletedToday = lastCompleted != null &&
-                  DateTime(lastCompleted.year, lastCompleted.month, lastCompleted.day)
-                      .isAtSameMomentAs(today);
-
-              return _HabitCard(
-                habit: habit,
-                isCompletedToday: isCompletedToday,
-                isDark: isDark,
-                onToggle: () {
-                  if (!isCompletedToday) {
-                    provider.markCompleted(habit);
-                  }
-                },
-                onEdit: () => _showEditDialog(context, habit, provider),
-                onDelete: () => _showDeleteConfirmation(context, habit, provider),
-              );
-            },
-          );
+          },
+        ),
+      ),
+      floatingActionButton: GradientFAB(
+        onPressed: () => _showAddDialog(context),
+      ),
+      bottomNavigationBar: CustomBottomNav(
+        currentIndex: _currentNavIndex,
+        onTap: (index) {
+          setState(() {
+            _currentNavIndex = index;
+          });
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddDialog(context),
-        backgroundColor: AppTheme.primaryColor,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Habit', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, HabitProvider provider) {
+    final longestStreak = provider.habits.isNotEmpty
+        ? provider.habits.map((h) => h.currentStreak).reduce((a, b) => a > b ? a : b)
+        : 0;
+
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Habits',
+                style: Theme.of(context).textTheme.displayMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${provider.habits.where((h) => h.isCompletedToday()).length} of ${provider.habits.length} completed',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          if (longestStreak > 0)
+            StreakIndicator(days: longestStreak),
+        ],
       ),
     );
+  }
+
+  Widget _buildTodayProgress(BuildContext context, int progress, List<Habit> habits) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Today\'s Progress',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Text(
+                '$progress%',
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                  fontSize: 32,
+                ),
+              ),
+              const Spacer(),
+              if (habits.isNotEmpty)
+                StreakIndicator(
+                  days: habits.map((h) => h.currentStreak).reduce((a, b) => a > b ? a : b),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: LinearProgressIndicator(
+              value: progress / 100,
+              minHeight: 8,
+              backgroundColor: AppColors.surfaceLight,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.success),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHabitItem(BuildContext context, Habit habit, HabitProvider provider) {
+    final isCompleted = habit.isCompletedToday();
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.sm,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Center(
+              child: Text(
+                _getHabitEmoji(habit.name),
+                style: const TextStyle(fontSize: 20),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  habit.name,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 4),
+                StreakBadge(days: habit.currentStreak),
+              ],
+            ),
+          ),
+          
+          GestureDetector(
+            onTap: () {
+              if (!isCompleted) {
+                provider.markCompleted(habit);
+              }
+            },
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: isCompleted ? AppColors.gradientGreen : null,
+                border: !isCompleted
+                    ? Border.all(color: AppColors.textTertiary, width: 2)
+                    : null,
+              ),
+              child: Icon(
+                isCompleted ? Icons.check : Icons.circle_outlined,
+                color: isCompleted ? Colors.white : AppColors.textTertiary,
+                size: 28,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeeklyStats(BuildContext context, List<Habit> habits) {
+    if (habits.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.all(AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Weekly Overview',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(7, (index) {
+              final day = ['M', 'T', 'W', 'T', 'F', 'S', 'S'][index];
+              final isToday = DateTime.now().weekday == index + 1;
+              
+              return Column(
+                children: [
+                  Text(
+                    day,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: isToday ? AppColors.primary : AppColors.textSecondary,
+                      fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isToday 
+                          ? AppColors.primary.withOpacity(0.2)
+                          : AppColors.surfaceLight,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${habits.length}',
+                        style: TextStyle(
+                          color: isToday ? AppColors.primary : AppColors.textSecondary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.track_changes,
+            size: 80,
+            color: AppColors.textTertiary.withOpacity(0.5),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'No habits yet',
+            style: Theme.of(context).textTheme.displaySmall,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Start building better habits today!',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getHabitEmoji(String habitName) {
+    final name = habitName.toLowerCase();
+    if (name.contains('water') || name.contains('drink')) return '💧';
+    if (name.contains('exercise') || name.contains('workout')) return '💪';
+    if (name.contains('read')) return '📚';
+    if (name.contains('meditate') || name.contains('meditation')) return '🧘';
+    if (name.contains('sleep')) return '😴';
+    if (name.contains('code') || name.contains('program')) return '💻';
+    if (name.contains('write') || name.contains('journal')) return '✍️';
+    if (name.contains('walk')) return '🚶';
+    return '⭐';
   }
 
   void _showAddDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => _AddEditHabitDialog(
-        onSave: (name) {
-          final provider = Provider.of<HabitProvider>(context, listen: false);
-          provider.addHabit(Habit(
-            id: const Uuid().v4(),
-            name: name,
-            isCompleted: false,
-            streak: 0,
-            createdAt: DateTime.now(),
-          ));
-        },
-      ),
-    );
-  }
+    final nameController = TextEditingController();
 
-  void _showEditDialog(BuildContext context, Habit habit, HabitProvider provider) {
-    showDialog(
-      context: context,
-      builder: (context) => _AddEditHabitDialog(
-        habit: habit,
-        onSave: (name) {
-          provider.updateHabit(Habit(
-            id: habit.id,
-            name: name,
-            isCompleted: habit.isCompleted,
-            streak: habit.streak,
-            lastCompleted: habit.lastCompleted,
-            createdAt: habit.createdAt,
-          ));
-        },
-      ),
-    );
-  }
-
-  void _showDeleteConfirmation(BuildContext context, Habit habit, HabitProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Habit'),
-        content: Text('Are you sure you want to delete "${habit.name}"? This will reset your ${habit.streak} day streak.'),
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Add Habit'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: 'Habit Name',
+            hintText: 'e.g., Drink 8 glasses of water',
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          GradientButton(
+            text: 'Add',
             onPressed: () {
-              provider.deleteHabit(habit.id);
-              Navigator.pop(context);
+              if (nameController.text.isNotEmpty) {
+                final habit = Habit(
+                  id: const Uuid().v4(),
+                  name: nameController.text,
+                  createdAt: DateTime.now(),
+                  streak: 0,
+                );
+                context.read<HabitProvider>().addHabit(habit);
+                Navigator.pop(context);
+              }
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            height: 40,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HabitCard extends StatelessWidget {
-  final Habit habit;
-  final bool isCompletedToday;
-  final bool isDark;
-  final VoidCallback onToggle;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-
-  const _HabitCard({
-    required this.habit,
-    required this.isCompletedToday,
-    required this.isDark,
-    required this.onToggle,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isCompletedToday
-              ? [Colors.green.shade400, Colors.green.shade600]
-              : isDark
-                  ? [Colors.grey[800]!, Colors.grey[850]!]
-                  : [Colors.white, Colors.grey.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: isCompletedToday
-                ? Colors.green.withOpacity(0.3)
-                : isDark
-                    ? Colors.black26
-                    : Colors.grey.withOpacity(0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onEdit,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: onToggle,
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isCompletedToday
-                              ? Colors.white
-                              : isDark
-                                  ? Colors.grey[700]
-                                  : Colors.grey[100],
-                          border: Border.all(
-                            color: isCompletedToday ? Colors.white : AppTheme.primaryColor,
-                            width: 3,
-                          ),
-                        ),
-                        child: isCompletedToday
-                            ? Icon(Icons.check, color: Colors.green.shade700, size: 32)
-                            : Icon(Icons.self_improvement, color: AppTheme.primaryColor, size: 28),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            habit.name,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: isCompletedToday ? Colors.white : (isDark ? Colors.white : Colors.black87),
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.local_fire_department,
-                                size: 18,
-                                color: habit.streak > 0
-                                    ? Colors.orange
-                                    : (isCompletedToday ? Colors.white70 : (isDark ? Colors.white54 : Colors.black54)),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${habit.streak} day streak',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isCompletedToday ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuButton(
-                      icon: Icon(
-                        Icons.more_vert,
-                        color: isCompletedToday ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
-                      ),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit),
-                              SizedBox(width: 8),
-                              Text('Edit'),
-                            ],
-                          ),
-                        ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Delete', style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                        ),
-                      ],
-                      onSelected: (value) {
-                        if (value == 'edit') onEdit();
-                        if (value == 'delete') onDelete();
-                      },
-                    ),
-                  ],
-                ),
-                if (habit.streak > 0) ...[
-                  const SizedBox(height: 16),
-                  _StreakVisualization(streak: habit.streak, isCompletedToday: isCompletedToday, isDark: isDark),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StreakVisualization extends StatelessWidget {
-  final int streak;
-  final bool isCompletedToday;
-  final bool isDark;
-
-  const _StreakVisualization({
-    required this.streak,
-    required this.isCompletedToday,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final displayDays = streak > 7 ? 7 : streak;
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Last 7 days',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: isCompletedToday ? Colors.white70 : (isDark ? Colors.white54 : Colors.black54),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: List.generate(7, (index) {
-            final isActive = index < displayDays;
-            return Expanded(
-              child: Container(
-                height: 8,
-                margin: EdgeInsets.only(right: index < 6 ? 4 : 0),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? (isCompletedToday ? Colors.white : Colors.orange)
-                      : (isCompletedToday ? Colors.white30 : (isDark ? Colors.white12 : Colors.grey.shade300)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-}
-
-class _AddEditHabitDialog extends StatefulWidget {
-  final Habit? habit;
-  final Function(String name) onSave;
-
-  const _AddEditHabitDialog({this.habit, required this.onSave});
-
-  @override
-  State<_AddEditHabitDialog> createState() => _AddEditHabitDialogState();
-}
-
-class _AddEditHabitDialogState extends State<_AddEditHabitDialog> {
-  late TextEditingController _nameController;
-  final List<String> _suggestions = [
-    'Meditation',
-    'Exercise',
-    'Reading',
-    'Journaling',
-    'Drink Water',
-    'Early Wake Up',
-    'Healthy Eating',
-    'Gratitude Practice',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.habit?.name ?? '');
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      backgroundColor: isDark ? Colors.grey[900] : Colors.white,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [AppTheme.primaryColor, AppTheme.accentColor],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: const Icon(Icons.self_improvement, color: Colors.white, size: 28),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        widget.habit == null ? 'Add New Habit' : 'Edit Habit',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                
-                // Habit Name
-                TextField(
-                  controller: _nameController,
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                  decoration: InputDecoration(
-                    labelText: 'Habit Name',
-                    labelStyle: TextStyle(color: isDark ? Colors.white70 : Colors.black54),
-                    hintText: 'e.g., Morning Meditation',
-                    hintStyle: TextStyle(color: isDark ? Colors.white30 : Colors.black26),
-                    prefixIcon: Icon(Icons.fitness_center, color: AppTheme.primaryColor),
-                    filled: true,
-                    fillColor: isDark ? Colors.grey[850] : Colors.grey[50],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: AppTheme.primaryColor, width: 2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                // Suggestions
-                Text(
-                  'Popular Habits',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _suggestions.map((suggestion) {
-                    return ActionChip(
-                      label: Text(suggestion),
-                      onPressed: () => setState(() => _nameController.text = suggestion),
-                      backgroundColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                      labelStyle: TextStyle(
-                        color: isDark ? Colors.white70 : Colors.black87,
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-                
-                // Actions
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: BorderSide(color: isDark ? Colors.white30 : Colors.black26),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white70 : Colors.black54,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          if (_nameController.text.trim().isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Please enter a habit name')),
-                            );
-                            return;
-                          }
-                          widget.onSave(_nameController.text.trim());
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: AppTheme.primaryColor,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.check_circle, color: Colors.white),
-                            const SizedBox(width: 8),
-                            Text(
-                              widget.habit == null ? 'Add Habit' : 'Save Changes',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

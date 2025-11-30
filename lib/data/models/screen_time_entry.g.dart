@@ -20,7 +20,7 @@ class ScreenTimeEntryAdapter extends TypeAdapter<ScreenTimeEntry> {
       id: fields[0] as String,
       appName: fields[1] as String,
       category: fields[2] as String,
-      duration: fields[3] as int,
+      durationMinutes: fields[3] as int,
       date: fields[4] as DateTime,
       createdAt: fields[5] as DateTime?,
     );
