@@ -34,8 +34,8 @@ class AuthService {
       final userModel = UserModel.fromFirebaseUser(userCredential.user!);
       userModel.displayName = displayName;
 
-      // Save to Firestore
-      await _saveUserToFirestore(userModel);
+      // Save to Firestore (commented out - using local Hive storage instead)
+      // await _saveUserToFirestore(userModel);
 
       return userModel;
     } on FirebaseAuthException catch (e) {
@@ -54,7 +54,8 @@ class AuthService {
         password: password,
       );
 
-      return await _getUserFromFirestore(userCredential.user!.uid);
+      // Create user model from Firebase user (no Firestore needed)
+      return UserModel.fromFirebaseUser(userCredential.user!);
     } on FirebaseAuthException catch (e) {
       throw _handleAuthException(e);
     }

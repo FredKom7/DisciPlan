@@ -30,6 +30,9 @@ class Todo extends HiveObject {
   @HiveField(8)
   String frequency; // 'daily', 'weekly', 'monthly'
 
+  @HiveField(9)
+  DateTime? completedAt;
+
   Todo({
     required this.id,
     required this.title,
@@ -40,6 +43,7 @@ class Todo extends HiveObject {
     this.deadline,
     DateTime? createdAt,
     this.frequency = 'daily',
+    this.completedAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
   Todo copyWith({
@@ -51,6 +55,7 @@ class Todo extends HiveObject {
     String? category,
     DateTime? deadline,
     String? frequency,
+    DateTime? completedAt,
   }) {
     return Todo(
       id: id ?? this.id,
@@ -62,6 +67,7 @@ class Todo extends HiveObject {
       deadline: deadline ?? this.deadline,
       frequency: frequency ?? this.frequency,
       createdAt: createdAt,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

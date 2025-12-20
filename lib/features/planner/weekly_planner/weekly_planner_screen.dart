@@ -32,15 +32,21 @@ class _WeeklyPlannerScreenState extends State<WeeklyPlannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_currentNavIndex == 0) {
-      context.go('/dashboard');
-      return const SizedBox.shrink();
-    } else if (_currentNavIndex == 2) {
-      context.go('/habits');
-      return const SizedBox.shrink();
-    } else if (_currentNavIndex == 3) {
-      context.go('/progress');
-      return const SizedBox.shrink();
+    // Handle navigation changes after build completes
+    if (_currentNavIndex != 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_currentNavIndex == 0) {
+          context.go('/dashboard');
+        } else if (_currentNavIndex == 2) {
+          context.go('/habits');
+        } else if (_currentNavIndex == 3) {
+          context.go('/progress');
+        }
+        // Reset to planner index
+        setState(() {
+          _currentNavIndex = 1;
+        });
+      });
     }
 
     return Scaffold(

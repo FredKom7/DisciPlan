@@ -16,6 +16,8 @@ import 'data/models/habit.dart';
 import 'data/models/screen_time_entry.dart';
 import 'data/models/restriction.dart';
 import 'data/models/progress_entry.dart';
+import 'data/models/app_usage_stats.dart';
+import 'data/models/app_restriction.dart';
 import 'app.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
@@ -36,6 +38,8 @@ void main() async {
   Hive.registerAdapter(ScreenTimeEntryAdapter());
   Hive.registerAdapter(RestrictionAdapter());
   Hive.registerAdapter(ProgressEntryAdapter());
+  Hive.registerAdapter(AppUsageStatsAdapter());
+  Hive.registerAdapter(AppRestrictionAdapter());
   // Register other adapters here as needed
   runApp(
     MultiProvider(

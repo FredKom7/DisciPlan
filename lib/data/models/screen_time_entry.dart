@@ -13,7 +13,7 @@ class ScreenTimeEntry extends HiveObject {
   String category; // productive, neutral, distracting
 
   @HiveField(3)
-  int duration; // in minutes
+  int durationMinutes; // in minutes
 
   @HiveField(4)
   DateTime date;
@@ -25,11 +25,8 @@ class ScreenTimeEntry extends HiveObject {
     required this.id,
     required this.appName,
     required this.category,
-    required int durationMinutes,
+    required this.durationMinutes,
     required this.date,
     DateTime? createdAt,
-  }) : duration = durationMinutes,
-       createdAt = createdAt ?? DateTime.now();
-
-  int get durationMinutes => duration;
+  }) : createdAt = createdAt ?? DateTime.now();
 }

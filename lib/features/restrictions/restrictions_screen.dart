@@ -1,37 +1,91 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../providers/restriction_provider.dart';
-import '../../data/models/restriction.dart';
+import 'dart:convert';
+import '../../providers/screen_time_provider.dart';
+import '../../data/models/app_restriction.dart';
 import '../../core/themes/app_colors.dart';
-import '../../core/widgets/gradient_button.dart';
+import '../../services/usage_stats_service.dart';
 import 'package:uuid/uuid.dart';
 
-class RestrictionsScreen extends StatelessWidget {
+class RestrictionsScreen extends StatefulWidget {
   const RestrictionsScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<RestrictionProvider>(
-      builder: (context, provider, _) {
-        final restrictions = provider.restrictions;
-        final activeCount = provider.activeRestrictions.length;
+  State<RestrictionsScreen> createState() => _RestrictionsScreenState();
+}
 
-        return Scaffold(
-          appBar: AppBar(
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => context.go('/dashboard'),
-            ),
-            title: const Text('Restrictions'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.info_outline),
-                onPressed: () => _showInfoDialog(context),
-              ),
-            ],
+class _RestrictionsScreenState extends State<RestrictionsScreen> {
+  List<Map<String, dynamic>> _installedApps = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAppsWithUsage();
+  }
+
+  Future<void> _loadAppsWithUsage() async {
+    setState(() => _isLoading = true);
+    
+    final provider = Provider.of<ScreenTimeProvider>(context, listen: false);
+    await provider.loadTodayUsageStats();
+    
+    final usageStatsService = UsageStatsService();
+    final apps = await usageStatsService.getInstalledApps();
+    
+    // Merge installed apps with usage stats
+    final appsWithUsage = apps.map((app) {
+      int usageMinutes = 0;
+      final matchingStats = provider.appUsageStats.where(
+        (stat) => stat.packageName == app['packageName']
+      );
+      if (matchingStats.isNotEmpty) {
+        usageMinutes = matchingStats.first.usageTimeMinutes;
+      }
+      
+      return {
+        ...app,
+        'usageTimeMinutes': usageMinutes,
+      };
+    }).toList();
+    
+    // Sort by usage (descending)
+    appsWithUsage.sort((a, b) => 
+      (b['usageTimeMinutes'] as int).compareTo(a['usageTimeMinutes'] as int)
+    );
+    
+    setState(() {
+      _installedApps = appsWithUsage;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/dashboard'),
+        ),
+        title: const Text('Restrictions'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadAppsWithUsage,
           ),
-          body: Column(
+        ],
+      ),
+      body: Consumer<ScreenTimeProvider>(
+        builder: (context, provider, _) {
+          if (!provider.hasPermission) {
+            return _buildPermissionRequest(context, provider);
+          }
+
+          final activeCount = provider.restrictions.where((r) => r.isActive).length;
+
+          return Column(
             children: [
               // Summary Card
               Container(
@@ -50,31 +104,78 @@ class RestrictionsScreen extends StatelessWidget {
                       height: 40,
                       color: Colors.white30,
                     ),
-                    _buildStat(context, '${restrictions.length}', 'Total'),
+                    _buildStat(context, '${provider.restrictions.length}', 'Total'),
                   ],
                 ),
               ),
 
-              // Restrictions List
+              // Apps List
               Expanded(
-                child: restrictions.isEmpty
-                    ? _buildEmptyState(context)
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                        itemCount: restrictions.length,
-                        itemBuilder: (context, index) {
-                          final restriction = restrictions[index];
-                          return _buildRestrictionCard(restriction, provider, context);
-                        },
-                      ),
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _installedApps.isEmpty
+                        ? _buildEmptyState(context)
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                            itemCount: _installedApps.length,
+                            itemBuilder: (context, index) {
+                              final app = _installedApps[index];
+                              return _buildAppCard(app, provider, context);
+                            },
+                          ),
               ),
             ],
-          ),
-          floatingActionButton: GradientFAB(
-            onPressed: () => _showAddDialog(context),
-          ),
-        );
-      },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPermissionRequest(
+      BuildContext context, ScreenTimeProvider provider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.security,
+              size: 80,
+              color: AppColors.primary.withOpacity(0.5),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Permission Required',
+              style: Theme.of(context).textTheme.displaySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'DisciPlan needs access to usage stats to show app usage and manage restrictions.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            ElevatedButton(
+              onPressed: () async {
+                await provider.requestPermission();
+                if (provider.hasPermission) {
+                  _loadAppsWithUsage();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.md,
+                ),
+              ),
+              child: const Text('Grant Permission'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -99,89 +200,138 @@ class RestrictionsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRestrictionCard(
-    Restriction restriction,
-    RestrictionProvider provider,
+  Widget _buildAppCard(
+    Map<String, dynamic> app,
+    ScreenTimeProvider provider,
     BuildContext context,
   ) {
-    return Dismissible(
-      key: Key(restriction.id),
-      background: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.error,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        alignment: Alignment.centerRight,
-        child: const Icon(Icons.delete, color: Colors.white),
+    final packageName = app['packageName'] as String;
+    final appName = app['appName'] as String;
+    final usageMinutes = app['usageTimeMinutes'] as int;
+    final appIcon = app['appIcon'] as String?;
+    
+    final restriction = provider.getRestrictionForPackage(packageName);
+    final hasRestriction = restriction != null;
+    final isLimitExceeded = provider.isLimitExceeded(packageName);
+
+    final hours = usageMinutes ~/ 60;
+    final minutes = usageMinutes % 60;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: hasRestriction
+            ? Border.all(
+                color: isLimitExceeded ? AppColors.error : AppColors.success,
+                width: 2,
+              )
+            : null,
       ),
-      direction: DismissDirection.endToStart,
-      onDismissed: (_) => provider.deleteRestriction(restriction.id),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border(
-            left: BorderSide(
-              color: restriction.isActive ? AppColors.success : AppColors.textTertiary,
-              width: 4,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: restriction.isActive
-                    ? AppColors.success.withOpacity(0.2)
-                    : AppColors.surfaceLight,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              // App Icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
+                child: appIcon != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        child: Image.memory(
+                          base64Decode(appIcon),
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(Icons.apps, color: AppColors.primary);
+                          },
+                        ),
+                      )
+                    : const Icon(Icons.apps, color: AppColors.primary),
               ),
-              child: Icon(
-                Icons.block,
-                color: restriction.isActive ? AppColors.success : AppColors.textTertiary,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    restriction.appName,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${restriction.startTime} - ${restriction.endTime}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (restriction.days.isNotEmpty) ...[
+              const SizedBox(width: AppSpacing.md),
+              
+              // App Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      appName,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
                     Text(
-                      restriction.days.join(', '),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.purple,
-                          ),
+                      usageMinutes > 0
+                          ? 'Used: ${hours > 0 ? "${hours}h " : ""}${minutes}m today'
+                          : 'Not used today',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    if (hasRestriction) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            isLimitExceeded ? Icons.warning : Icons.check_circle,
+                            size: 14,
+                            color: isLimitExceeded ? AppColors.error : AppColors.success,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Limit: ${restriction.limitText}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: isLimitExceeded ? AppColors.error : AppColors.success,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            Switch(
-              value: restriction.isActive,
-              onChanged: (value) {
-                provider.toggleRestriction(restriction.id);
-              },
-              activeColor: AppColors.success,
+              
+              // Set Restriction Button
+              if (!hasRestriction)
+                OutlinedButton(
+                  onPressed: () => _showSetLimitDialog(context, packageName, appName, provider),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                  ),
+                  child: const Text('Set Limit'),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.edit, color: AppColors.primary),
+                  onPressed: () => _showEditLimitDialog(context, restriction, provider),
+                ),
+            ],
+          ),
+          if (hasRestriction) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: () => provider.deleteRestriction(packageName),
+                  icon: const Icon(Icons.delete, size: 16),
+                  label: const Text('Remove'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                  ),
+                ),
+              ],
             ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -192,18 +342,18 @@ class RestrictionsScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.block,
+            Icons.apps,
             size: 80,
             color: AppColors.textTertiary.withOpacity(0.5),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'No restrictions set',
+            'No apps found',
             style: Theme.of(context).textTheme.displaySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Add restrictions to block distracting apps!',
+            'Grant permission to see installed apps',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
@@ -211,88 +361,75 @@ class RestrictionsScreen extends StatelessWidget {
     );
   }
 
-  void _showInfoDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('About Restrictions'),
-        content: const Text(
-          'Restrictions help you stay focused by blocking access to specific apps during certain times. '
-          'Set up time-based restrictions to improve your productivity!',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddDialog(BuildContext context) {
-    final appNameController = TextEditingController();
-    String startTime = '09:00';
-    String endTime = '17:00';
-    List<String> selectedDays = [];
+  void _showSetLimitDialog(
+    BuildContext context,
+    String packageName,
+    String appName,
+    ScreenTimeProvider provider,
+  ) {
+    int hours = 1;
+    int minutes = 0;
+    List<int> selectedDays = [];
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           backgroundColor: AppColors.cardBackground,
-          title: const Text('Add Restriction'),
+          title: Text('Set Limit for $appName'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
-                  controller: appNameController,
-                  decoration: const InputDecoration(
-                    labelText: 'App Name',
-                    hintText: 'e.g., Instagram',
-                  ),
-                ),
+                const Text('Daily Time Limit:'),
                 const SizedBox(height: AppSpacing.md),
                 Row(
                   children: [
                     Expanded(
-                      child: TextFormField(
-                        initialValue: startTime,
-                        decoration: const InputDecoration(labelText: 'Start Time'),
-                        onChanged: (value) => startTime = value,
+                      child: DropdownButtonFormField<int>(
+                        value: hours,
+                        decoration: const InputDecoration(labelText: 'Hours'),
+                        items: List.generate(24, (i) => i)
+                            .map((h) => DropdownMenuItem(value: h, child: Text('$h')))
+                            .toList(),
+                        onChanged: (value) => setState(() => hours = value!),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
-                      child: TextFormField(
-                        initialValue: endTime,
-                        decoration: const InputDecoration(labelText: 'End Time'),
-                        onChanged: (value) => endTime = value,
+                      child: DropdownButtonFormField<int>(
+                        value: minutes,
+                        decoration: const InputDecoration(labelText: 'Minutes'),
+                        items: [0, 15, 30, 45]
+                            .map((m) => DropdownMenuItem(value: m, child: Text('$m')))
+                            .toList(),
+                        onChanged: (value) => setState(() => minutes = value!),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppSpacing.md),
-                const Text('Active Days:'),
+                const SizedBox(height: AppSpacing.lg),
+                const Text('Restrict on specific days (optional):'),
+                const SizedBox(height: AppSpacing.sm),
                 Wrap(
                   spacing: 8,
-                  children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                      .map((day) => FilterChip(
-                            label: Text(day),
-                            selected: selectedDays.contains(day),
-                            onSelected: (selected) {
-                              setState(() {
-                                if (selected) {
-                                  selectedDays.add(day);
-                                } else {
-                                  selectedDays.remove(day);
-                                }
-                              });
-                            },
-                          ))
-                      .toList(),
+                  children: [
+                    for (int i = 1; i <= 7; i++)
+                      FilterChip(
+                        label: Text(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i - 1]),
+                        selected: selectedDays.contains(i),
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              selectedDays.add(i);
+                            } else {
+                              selectedDays.remove(i);
+                            }
+                          });
+                        },
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -302,23 +439,126 @@ class RestrictionsScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
-            GradientButton(
-              text: 'Add',
+            ElevatedButton(
               onPressed: () {
-                if (appNameController.text.isNotEmpty) {
-                  final restriction = Restriction(
+                final totalMinutes = (hours * 60) + minutes;
+                if (totalMinutes > 0) {
+                  final restriction = AppRestriction(
                     id: const Uuid().v4(),
-                    appName: appNameController.text,
-                    startTime: startTime,
-                    endTime: endTime,
-                    days: selectedDays,
-                    isActive: true,
+                    packageName: packageName,
+                    appName: appName,
+                    dailyLimitMinutes: totalMinutes,
+                    restrictedDays: selectedDays,
+                    createdAt: DateTime.now(),
                   );
-                  context.read<RestrictionProvider>().addRestriction(restriction);
+                  provider.addRestriction(restriction);
                   Navigator.pop(context);
                 }
               },
-              height: 40,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('Set Limit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditLimitDialog(
+    BuildContext context,
+    AppRestriction restriction,
+    ScreenTimeProvider provider,
+  ) {
+    int hours = restriction.dailyLimitMinutes ~/ 60;
+    int minutes = restriction.dailyLimitMinutes % 60;
+    List<int> selectedDays = List.from(restriction.restrictedDays);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: Text('Edit Limit for ${restriction.appName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Daily Time Limit:'),
+                const SizedBox(height: AppSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: hours,
+                        decoration: const InputDecoration(labelText: 'Hours'),
+                        items: List.generate(24, (i) => i)
+                            .map((h) => DropdownMenuItem(value: h, child: Text('$h')))
+                            .toList(),
+                        onChanged: (value) => setState(() => hours = value!),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: minutes,
+                        decoration: const InputDecoration(labelText: 'Minutes'),
+                        items: [0, 15, 30, 45]
+                            .map((m) => DropdownMenuItem(value: m, child: Text('$m')))
+                            .toList(),
+                        onChanged: (value) => setState(() => minutes = value!),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                const Text('Restrict on specific days (optional):'),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (int i = 1; i <= 7; i++)
+                      FilterChip(
+                        label: Text(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i - 1]),
+                        selected: selectedDays.contains(i),
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              selectedDays.add(i);
+                            } else {
+                              selectedDays.remove(i);
+                            }
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final totalMinutes = (hours * 60) + minutes;
+                if (totalMinutes > 0) {
+                  final updated = restriction.copyWith(
+                    dailyLimitMinutes: totalMinutes,
+                    restrictedDays: selectedDays,
+                  );
+                  provider.updateRestriction(updated);
+                  Navigator.pop(context);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+              child: const Text('Update'),
             ),
           ],
         ),

@@ -1,47 +1,44 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'screen_time_entry.dart';
+part of 'app_usage_stats.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class ScreenTimeEntryAdapter extends TypeAdapter<ScreenTimeEntry> {
+class AppUsageStatsAdapter extends TypeAdapter<AppUsageStats> {
   @override
-  final int typeId = 3;
+  final int typeId = 6;
 
   @override
-  ScreenTimeEntry read(BinaryReader reader) {
+  AppUsageStats read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return ScreenTimeEntry(
-      id: fields[0] as String,
+    return AppUsageStats(
+      packageName: fields[0] as String,
       appName: fields[1] as String,
-      category: fields[2] as String,
-      durationMinutes: fields[3] as int,
-      date: fields[4] as DateTime,
-      createdAt: fields[5] as DateTime?,
+      usageTimeMinutes: fields[2] as int,
+      date: fields[3] as DateTime,
+      appIcon: fields[4] as String?,
     );
   }
 
   @override
-  void write(BinaryWriter writer, ScreenTimeEntry obj) {
+  void write(BinaryWriter writer, AppUsageStats obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(5)
       ..writeByte(0)
-      ..write(obj.id)
+      ..write(obj.packageName)
       ..writeByte(1)
       ..write(obj.appName)
       ..writeByte(2)
-      ..write(obj.category)
+      ..write(obj.usageTimeMinutes)
       ..writeByte(3)
-      ..write(obj.durationMinutes)
-      ..writeByte(4)
       ..write(obj.date)
-      ..writeByte(5)
-      ..write(obj.createdAt);
+      ..writeByte(4)
+      ..write(obj.appIcon);
   }
 
   @override
@@ -50,7 +47,7 @@ class ScreenTimeEntryAdapter extends TypeAdapter<ScreenTimeEntry> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ScreenTimeEntryAdapter &&
+      other is AppUsageStatsAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

@@ -1,0 +1,15 @@
+# Quick Android Setup - Copy and paste these commands
+
+# Set environment variables (run these in PowerShell)
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:GRADLE_USER_HOME = "C:\gradle-home"
+$env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+
+# Verify Java is working
+java -version
+
+# Start emulator
+flutter emulators --launch Pixel_6
+
+# Run your app (wait for emulator to start first)
+flutter run

@@ -29,6 +29,9 @@ class UserModel extends HiveObject {
   @HiveField(7)
   List<String> authProviders; // ['email', 'phone', 'google']
 
+  @HiveField(8)
+  bool emailVerified;
+
   UserModel({
     required this.uid,
     this.email,
@@ -38,6 +41,7 @@ class UserModel extends HiveObject {
     DateTime? createdAt,
     DateTime? updatedAt,
     List<String>? authProviders,
+    this.emailVerified = false,
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now(),
         authProviders = authProviders ?? [];
@@ -87,6 +91,7 @@ class UserModel extends HiveObject {
       displayName: firebaseUser.displayName ?? firebaseUser.email?.split('@')[0] ?? 'User',
       photoURL: firebaseUser.photoURL,
       authProviders: providers,
+      emailVerified: firebaseUser.emailVerified ?? false,
     );
   }
 

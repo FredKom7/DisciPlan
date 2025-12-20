@@ -33,7 +33,12 @@ class TodoProvider extends ChangeNotifier {
   Future<void> toggleCompleted(String id) async {
     final todo = _todos.firstWhere((t) => t.id == id);
     final wasCompleted = todo.isCompleted;
-    await updateTodo(todo.copyWith(isCompleted: !todo.isCompleted));
+    final newCompletedStatus = !todo.isCompleted;
+    
+    await updateTodo(todo.copyWith(
+      isCompleted: newCompletedStatus,
+      completedAt: newCompletedStatus ? DateTime.now() : null,
+    ));
     
     if (!wasCompleted) {
       await NotificationService.notifyTodoCompleted(todo.title);

@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:convert';
 import '../../providers/screen_time_provider.dart';
-import '../../data/models/screen_time_entry.dart';
 import '../../core/themes/app_colors.dart';
-import '../../core/widgets/gradient_button.dart';
-import 'package:uuid/uuid.dart';
 
 class ScreenTimeScreen extends StatefulWidget {
   const ScreenTimeScreen({Key? key}) : super(key: key);
@@ -15,14 +13,12 @@ class ScreenTimeScreen extends StatefulWidget {
 }
 
 class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
-  DateTime _selectedDate = DateTime.now();
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<ScreenTimeProvider>(context, listen: false)
-          .loadEntriesForDate(_selectedDate);
+      final provider = Provider.of<ScreenTimeProvider>(context, listen: false);
+      provider.loadTodayUsageStats();
     });
   }
 
@@ -35,10 +31,26 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
           onPressed: () => context.go('/dashboard'),
         ),
         title: const Text('Screen Time'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              Provider.of<ScreenTimeProvider>(context, listen: false)
+                  .loadTodayUsageStats();
+            },
+          ),
+        ],
       ),
       body: Consumer<ScreenTimeProvider>(
         builder: (context, provider, _) {
-          final entries = provider.entries;
+          if (!provider.hasPermission) {
+            return _buildPermissionRequest(context, provider);
+          }
+
+          if (provider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
           final totalMinutes = provider.getTodayTotal();
           final hours = totalMinutes ~/ 60;
           final minutes = totalMinutes % 60;
@@ -79,19 +91,16 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
                 ),
               ),
 
-              // Category Summary
-              if (entries.isNotEmpty) _buildCategorySummary(provider),
-
-              // Entries List
+              // App Usage List
               Expanded(
-                child: entries.isEmpty
+                child: provider.appUsageStats.isEmpty
                     ? _buildEmptyState(context)
                     : ListView.builder(
                         padding: const EdgeInsets.all(AppSpacing.md),
-                        itemCount: entries.length,
+                        itemCount: provider.appUsageStats.length,
                         itemBuilder: (context, index) {
-                          final entry = entries[index];
-                          return _buildEntryCard(entry, provider);
+                          final stat = provider.appUsageStats[index];
+                          return _buildAppUsageCard(stat, provider);
                         },
                       ),
               ),
@@ -99,135 +108,162 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
           );
         },
       ),
-      floatingActionButton: GradientFAB(
-        onPressed: () => _showAddDialog(context),
+    );
+  }
+
+  Widget _buildPermissionRequest(
+      BuildContext context, ScreenTimeProvider provider) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.security,
+              size: 80,
+              color: AppColors.primary.withOpacity(0.5),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Permission Required',
+              style: Theme.of(context).textTheme.displaySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'DisciPlan needs access to usage stats to show your screen time.',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            ElevatedButton(
+              onPressed: () async {
+                await provider.requestPermission();
+                if (provider.hasPermission) {
+                  provider.loadTodayUsageStats();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xl,
+                  vertical: AppSpacing.md,
+                ),
+              ),
+              child: const Text('Grant Permission'),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildCategorySummary(ScreenTimeProvider provider) {
-    final summary = provider.getCategorySummary();
-    
+  Widget _buildAppUsageCard(
+      dynamic stat, ScreenTimeProvider provider) {
+    final hours = stat.usageTimeMinutes ~/ 60;
+    final minutes = stat.usageTimeMinutes % 60;
+    final hasRestriction = provider.hasRestriction(stat.packageName);
+    final isLimitExceeded = provider.isLimitExceeded(stat.packageName);
+
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.md),
+        border: isLimitExceeded
+            ? Border.all(color: AppColors.error, width: 2)
+            : null,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            'By Category',
-            style: Theme.of(context).textTheme.headlineMedium,
+          // App Icon
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: stat.appIcon != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Image.memory(
+                      base64Decode(stat.appIcon),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.apps, color: AppColors.primary);
+                      },
+                    ),
+                  )
+                : const Icon(Icons.apps, color: AppColors.primary),
           ),
-          const SizedBox(height: AppSpacing.md),
-          ...summary.entries.map((entry) {
-            final hours = entry.value ~/ 60;
-            final minutes = entry.value % 60;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+          const SizedBox(width: AppSpacing.md),
+          
+          // App Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  stat.appName,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                if (hasRestriction) ...[
                   Row(
                     children: [
-                      Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: _getCategoryColor(entry.key),
-                          shape: BoxShape.circle,
-                        ),
+                      Icon(
+                        isLimitExceeded ? Icons.warning : Icons.timer,
+                        size: 14,
+                        color: isLimitExceeded
+                            ? AppColors.error
+                            : AppColors.textSecondary,
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(entry.key),
+                      const SizedBox(width: 4),
+                      Text(
+                        provider.getRestrictionForPackage(stat.packageName)!.limitText,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: isLimitExceeded
+                                  ? AppColors.error
+                                  : AppColors.textSecondary,
+                            ),
+                      ),
                     ],
                   ),
-                  Text(
-                    '${hours}h ${minutes}m',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
                 ],
-              ),
-            );
-          }).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEntryCard(ScreenTimeEntry entry, ScreenTimeProvider provider) {
-    final hours = entry.durationMinutes ~/ 60;
-    final minutes = entry.durationMinutes % 60;
-
-    return Dismissible(
-      key: Key(entry.id),
-      background: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.error,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-        ),
-        alignment: Alignment.centerRight,
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      direction: DismissDirection.endToStart,
-      onDismissed: (_) => provider.deleteEntry(entry.id, _selectedDate),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          border: Border(
-            left: BorderSide(
-              color: _getCategoryColor(entry.category),
-              width: 4,
+              ],
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: _getCategoryColor(entry.category).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+          
+          // Usage Time
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                hours > 0 ? '${hours}h ${minutes}m' : '${minutes}m',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isLimitExceeded ? AppColors.error : null,
+                    ),
               ),
-              child: Icon(
-                _getCategoryIcon(entry.category),
-                color: _getCategoryColor(entry.category),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.appName,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    entry.category,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              '${hours}h ${minutes}m',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ],
-        ),
+              if (hasRestriction) ...[
+                const SizedBox(height: 4),
+                Text(
+                  isLimitExceeded ? 'Limit exceeded' : 'Within limit',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isLimitExceeded
+                            ? AppColors.error
+                            : AppColors.success,
+                      ),
+                ),
+              ],
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -249,106 +285,8 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Add your first entry!',
+            'Use your phone and check back later!',
             style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getCategoryColor(String category) {
-    switch (category.toLowerCase()) {
-      case 'productive':
-        return AppColors.success;
-      case 'neutral':
-        return AppColors.warning;
-      case 'distracting':
-        return AppColors.error;
-      default:
-        return AppColors.primary;
-    }
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category.toLowerCase()) {
-      case 'productive':
-        return Icons.work;
-      case 'neutral':
-        return Icons.apps;
-      case 'distracting':
-        return Icons.games;
-      default:
-        return Icons.phone_android;
-    }
-  }
-
-  void _showAddDialog(BuildContext context) {
-    final appNameController = TextEditingController();
-    final durationController = TextEditingController();
-    String selectedCategory = 'Productive';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Add Screen Time'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: appNameController,
-                decoration: const InputDecoration(
-                  labelText: 'App Name',
-                  hintText: 'e.g., Instagram',
-                ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: durationController,
-                decoration: const InputDecoration(
-                  labelText: 'Duration (minutes)',
-                  hintText: 'e.g., 30',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: ['Productive', 'Neutral', 'Distracting']
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                    .toList(),
-                onChanged: (value) {
-                  selectedCategory = value!;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          GradientButton(
-            text: 'Add',
-            onPressed: () {
-              if (appNameController.text.isNotEmpty &&
-                  durationController.text.isNotEmpty) {
-                final entry = ScreenTimeEntry(
-                  id: const Uuid().v4(),
-                  appName: appNameController.text,
-                  category: selectedCategory,
-                  durationMinutes: int.parse(durationController.text),
-                  date: _selectedDate,
-                );
-                context.read<ScreenTimeProvider>().addEntry(entry);
-                Navigator.pop(context);
-              }
-            },
-            height: 40,
           ),
         ],
       ),

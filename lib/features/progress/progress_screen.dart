@@ -20,15 +20,21 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_currentNavIndex == 0) {
-      context.go('/dashboard');
-      return const SizedBox.shrink();
-    } else if (_currentNavIndex == 1) {
-      context.go('/planner');
-      return const SizedBox.shrink();
-    } else if (_currentNavIndex == 2) {
-      context.go('/habits');
-      return const SizedBox.shrink();
+    // Handle navigation changes after build completes
+    if (_currentNavIndex != 3) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_currentNavIndex == 0) {
+          context.go('/dashboard');
+        } else if (_currentNavIndex == 1) {
+          context.go('/planner');
+        } else if (_currentNavIndex == 2) {
+          context.go('/habits');
+        }
+        // Reset to progress index
+        setState(() {
+          _currentNavIndex = 3;
+        });
+      });
     }
 
     return Scaffold(
@@ -122,7 +128,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: AppSpacing.md,
         crossAxisSpacing: AppSpacing.md,
-        childAspectRatio: 1.3,
+        childAspectRatio: 1.0,
         children: [
           _buildStatCard(
             icon: Icons.check_circle,
@@ -160,7 +166,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(AppRadius.md),
@@ -168,24 +174,26 @@ class _ProgressScreenState extends State<ProgressScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: AppSpacing.sm),
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 6),
           Text(
             value,
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 24,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: AppColors.textSecondary,
             ),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -311,6 +319,26 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Widget _buildAchievements(BuildContext context) {
+    final todoProvider = context.watch<TodoProvider>();
+    final habitProvider = context.watch<HabitProvider>();
+    
+    final completedTasks = todoProvider.todos.where((t) => t.isCompleted).length;
+    final maxStreak = habitProvider.habits.isNotEmpty
+        ? habitProvider.habits.map((h) => h.streak).reduce((a, b) => a > b ? a : b)
+        : 0;
+    
+    // Achievement checks
+    final firstTask = todoProvider.todos.any((t) => t.isCompleted);
+    final sevenDayStreak = habitProvider.habits.any((h) => h.streak >= 7);
+    final thirtyDayStreak = habitProvider.habits.any((h) => h.streak >= 30);
+    final hundredTasks = completedTasks >= 100;
+    final habitMaster = habitProvider.habits.where((h) => h.streak >= 14).isNotEmpty;
+    final disciplineKing = completedTasks >= 50 && maxStreak >= 14;
+    
+    final unlockedCount = [firstTask, sevenDayStreak, thirtyDayStreak, hundredTasks, habitMaster, disciplineKing]
+        .where((achieved) => achieved)
+        .length;
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -329,7 +357,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               Text(
-                '3/6',
+                '$unlockedCount/6',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
@@ -339,12 +367,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
             children: [
-              _buildAchievementBadge('🎯', 'First Task', true),
-              _buildAchievementBadge('🔥', '7 Day Streak', true),
-              _buildAchievementBadge('💪', '30 Days', true),
-              _buildAchievementBadge('⭐', '100 Tasks', false),
-              _buildAchievementBadge('🏅', 'Habit Master', false),
-              _buildAchievementBadge('👑', 'Discipline King', false),
+              _buildAchievementBadge('🎯', 'First Task', firstTask),
+              _buildAchievementBadge('🔥', '7 Day Streak', sevenDayStreak),
+              _buildAchievementBadge('💪', '30 Days', thirtyDayStreak),
+              _buildAchievementBadge('⭐', '100 Tasks', hundredTasks),
+              _buildAchievementBadge('🏅', 'Habit Master', habitMaster),
+              _buildAchievementBadge('👑', 'Discipline King', disciplineKing),
             ],
           ),
         ],
@@ -391,6 +419,34 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Widget _buildWeeklyTrend(BuildContext context) {
+    final todoProvider = context.watch<TodoProvider>();
+    
+    // Calculate daily completion counts for the last 7 days
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekData = List<int>.filled(7, 0);
+    
+    for (var todo in todoProvider.todos) {
+      if (todo.completedAt != null) {
+        final completedDate = DateTime(
+          todo.completedAt!.year,
+          todo.completedAt!.month,
+          todo.completedAt!.day,
+        );
+        final daysDiff = today.difference(completedDate).inDays;
+        if (daysDiff >= 0 && daysDiff < 7) {
+          weekData[6 - daysDiff]++;
+        }
+      }
+    }
+    
+    // Calculate max for scaling
+    final maxCount = weekData.reduce((a, b) => a > b ? a : b);
+    final hasData = maxCount > 0;
+    
+    // Calculate improvement (compare this week vs last week if we had that data)
+    // For now, just show if there's any activity
+    
     return Container(
       margin: const EdgeInsets.all(AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -412,41 +468,56 @@ class _ProgressScreenState extends State<ProgressScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _buildDayBar('M', 60),
-              _buildDayBar('T', 75),
-              _buildDayBar('W', 50),
-              _buildDayBar('T', 80),
-              _buildDayBar('F', 90),
-              _buildDayBar('S', 85),
-              _buildDayBar('S', 70),
+              _buildDayBar('M', weekData[0], maxCount),
+              _buildDayBar('T', weekData[1], maxCount),
+              _buildDayBar('W', weekData[2], maxCount),
+              _buildDayBar('T', weekData[3], maxCount),
+              _buildDayBar('F', weekData[4], maxCount),
+              _buildDayBar('S', weekData[5], maxCount),
+              _buildDayBar('S', weekData[6], maxCount),
             ],
           ),
           
           const SizedBox(height: AppSpacing.lg),
           
-          Center(
-            child: Text(
-              '+15% improvement this month 🎉',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.success,
-                fontWeight: FontWeight.w600,
+          if (hasData)
+            Center(
+              child: Text(
+                'Keep up the great work! 🎉',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.success,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            )
+          else
+            Center(
+              child: Text(
+                'Complete tasks to see your weekly trend',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildDayBar(String day, double percentage) {
+  Widget _buildDayBar(String day, int count, int maxCount) {
+    // Calculate height based on count (min 20 for visibility, max 135)
+    final height = count == 0 ? 20.0 : (count / (maxCount > 0 ? maxCount : 1) * 115 + 20);
+    
     return Column(
       children: [
         Container(
           width: 32,
-          height: percentage * 1.5,
+          height: height,
           decoration: BoxDecoration(
-            gradient: AppColors.gradientBlue,
+            gradient: count > 0 ? AppColors.gradientBlue : null,
+            color: count == 0 ? AppColors.surfaceLight : null,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
         ),
